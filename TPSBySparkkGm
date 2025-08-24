@@ -1,0 +1,165 @@
+--// Whitelist by SparkkGM
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Pega whitelist do Pastebin (RAW link!)
+local success, data = pcall(function()
+    return game:HttpGet("https://pastebin.com/raw/hAZFndq7")
+end)
+
+if not success or not data then
+    LocalPlayer:Kick("Falha ao carregar whitelist!")
+    return
+end
+
+local whitelist = {}
+pcall(function()
+    whitelist = HttpService:JSONDecode(data)
+end)
+
+-- Função para verificar
+local function IsWhitelisted(player)
+    for _, v in ipairs(whitelist) do
+        if v == player.Name or v == player.UserId then
+            return true
+        end
+    end
+    return false
+end
+
+-- Checagem
+if not IsWhitelisted(LocalPlayer) then
+    LocalPlayer:Kick("SparkkGM: not whitelisted!")
+    return -- PARA o script aqui
+end
+
+--// SE PASSAR DAQUI, ESTÁ NA WHITELIST //--
+
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local player = LocalPlayer
+local reach = 5
+local ball = Workspace:WaitForChild("TPSSystem"):WaitForChild("TPS")
+local legParts = {}
+
+-- Detecta pernas
+local function refreshLegs()
+    legParts = {}
+    local char = player.Character
+    if not char then return end
+
+    if char:FindFirstChild("LeftUpperLeg") then -- R15
+        local names = {"LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
+        for _, name in ipairs(names) do
+            local part = char:FindFirstChild(name)
+            if part then table.insert(legParts, part) end
+        end
+    elseif char:FindFirstChild("Left Leg") then -- R6
+        local names = {"Left Leg","Right Leg"}
+        for _, name in ipairs(names) do
+            local part = char:FindFirstChild(name)
+            if part then table.insert(legParts, part) end
+        end
+    end
+end
+
+-- Tocar bola
+local function touchBall()
+    if #legParts == 0 then refreshLegs() end
+    if #legParts == 0 then return end
+
+    for _, leg in ipairs(legParts) do
+        local distance = (leg.Position - ball.Position).Magnitude
+        if distance <= reach then
+            pcall(function()
+                local ti = leg:FindFirstChildWhichIsA("TouchTransmitter", true)
+                if ti then
+                    firetouchinterest(ball, ti.Parent, 0)
+                    firetouchinterest(ball, ti.Parent, 1)
+                end
+            end)
+        end
+    end
+end
+
+-- Cria GUI
+local gui, label
+local function createGUI()
+    if gui then gui:Destroy() end -- Remove antiga se existir
+    gui = Instance.new("ScreenGui")
+    gui.Name = "spark"
+    gui.Parent = player:WaitForChild("PlayerGui")
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.fromScale(0.22, 0.1)
+    frame.Position = UDim2.fromScale(0.05, 0.05)
+    frame.BackgroundTransparency = 0.4
+    frame.BackgroundColor3 = Color3.new(0,0,0)
+    frame.Parent = gui
+
+    label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,0.5,0)
+    label.Text = "Reach: "..reach
+    label.TextScaled = true
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Parent = frame
+
+    local function makeButton(text, pos, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0.4,0,0.5,0)
+        btn.Position = pos
+        btn.Text = text
+        btn.TextScaled = true
+        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Parent = frame
+        btn.MouseButton1Click:Connect(callback)
+    end
+
+    makeButton("-", UDim2.new(0,0,0.5,0), function()
+        reach = math.max(1, reach-1)
+        label.Text = "Reach: "..reach
+    end)
+
+    makeButton("+", UDim2.new(0.6,0,0.5,0), function()
+        reach = reach+1
+        label.Text = "Reach: "..reach
+    end)
+end
+
+-- Hitbox da bola
+local reachSphere = Instance.new("Part")
+reachSphere.Name = "tpss"
+reachSphere.Shape = Enum.PartType.Ball
+reachSphere.Anchored = true
+reachSphere.CanCollide = false
+reachSphere.Transparency = 0.7
+reachSphere.Material = Enum.Material.ForceField
+reachSphere.Color = Color3.fromRGB(0,150,255)
+reachSphere.Size = Vector3.new(reach*2, reach*2, reach*2)
+reachSphere.Parent = Workspace
+
+-- Atualiza hitbox
+RunService.RenderStepped:Connect(function()
+    if ball then
+        reachSphere.Position = ball.Position
+        reachSphere.Size = Vector3.new(reach*2, reach*2, reach*2)
+    end
+end)
+
+-- Loop principal leve
+RunService.Heartbeat:Connect(touchBall)
+
+-- Respawn
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    refreshLegs()
+    createGUI() -- recria GUI ao respawn
+end)
+
+-- Inicial
+refreshLegs()
+createGUI()
